@@ -26,7 +26,6 @@
 
 #include <array>
 #include <bitset>
-#include <chrono>
 #include <iostream>
 #include <memory>
 #include <queue>
@@ -34,11 +33,8 @@
 #include <set>
 #include <unordered_map>
 
-
 namespace pixelz {
 raylib::Window window(1920, 1080, "pixelz");
-using clock = std::chrono::high_resolution_clock;
-using seconds = std::chrono::duration<float, std::chrono::seconds::period>;
 
 using Entity = std::uint32_t;
 constexpr Entity MAX_ENTITIES = 5000;
@@ -65,6 +61,11 @@ struct RigidBody {
 
 struct Pixel {
     raylib::Color color;
+};
+
+struct Rectangle {
+    raylib::Color color;
+    raylib::Rectangle rec;
 };
 
 class EntityManager {
@@ -398,7 +399,11 @@ class RenderSystem : public System {
         for (auto const &entity : entities_) {
             auto &transform = gCoordinator.get_component<Transform>(entity);
             auto &pixel = gCoordinator.get_component<Pixel>(entity);
-            pixel.color.DrawRectangle(transform.position.x, window.GetHeight() - transform.position.y, 4, 4);
+            raylib::Rectangle rec;
+            rec.SetHeight(transform.scale);
+            rec.SetWidth(transform.scale);
+            rec.SetPosition(transform.position.x, window.GetHeight() - transform.position.y);
+            rec.Draw(pixel.color);
         }
     };
 
@@ -444,9 +449,9 @@ int main() {
 
     std::default_random_engine generator;
     std::uniform_real_distribution<float> randX(0.0f, window.GetWidth());
-    std::uniform_real_distribution<float> randY(0.0f, window.GetHeight());
+    std::uniform_real_distribution<float> randY(100.0f, window.GetHeight() + 100.0f);
     std::uniform_real_distribution<float> randRotation(0.0f, 3.1415926f);
-    std::uniform_real_distribution<float> randScale(1.0f, 2.0f);
+    std::uniform_real_distribution<float> randScale(4.0f, 20.0f);
     std::uniform_real_distribution<float> randGravity(-10.0f, -1.0f);
     std::uniform_int_distribution<uint8_t> randColor(0, 255);
 
@@ -460,15 +465,17 @@ int main() {
         gCoordinator.add_component(entity, pixelz::Transform{.position = {randX(generator), randY(generator)},
                                                              .rotation = randRotation(generator),
                                                              .scale = scale});
-        gCoordinator.add_component(entity,
-                                   pixelz::Pixel{.color = raylib::Color(randColor(generator), randColor(generator),
-                                                                        randColor(generator), 255)});
+        gCoordinator.add_component(
+            entity, pixelz::Pixel{
+                        .color = raylib::Color(randColor(generator), randColor(generator), randColor(generator), 255),
+                    });
     }
     physics_system->init();
 
     float dt = 0.0f;
     while (!window.ShouldClose()) {
-        auto st = clock::now();
+        auto st = window.GetTime();
+
         physics_system->update(dt);
 
         window.BeginDrawing();
@@ -478,7 +485,7 @@ int main() {
         }
         window.EndDrawing();
 
-        dt = seconds(clock::now() - st).count();
+        dt = window.GetTime() - st;
     }
 
     return EXIT_SUCCESS;
