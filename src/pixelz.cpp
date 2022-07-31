@@ -34,8 +34,11 @@
 #include <set>
 #include <unordered_map>
 
+
 namespace pixelz {
 raylib::Window window(1920, 1080, "pixelz");
+using clock = std::chrono::high_resolution_clock;
+using seconds = std::chrono::duration<float, std::chrono::seconds::period>;
 
 using Entity = std::uint32_t;
 constexpr Entity MAX_ENTITIES = 5000;
@@ -390,7 +393,7 @@ class PhysicsSystem : public System {
 
 class RenderSystem : public System {
   public:
-    void init();
+    void init(){};
     void update(float dt) {
         for (auto const &entity : entities_) {
             auto &transform = gCoordinator.get_component<Transform>(entity);
@@ -419,7 +422,6 @@ int main() {
     gCoordinator.register_component<pixelz::Pixel>();
 
     auto physicsSystem = gCoordinator.register_system<PhysicsSystem>();
-    auto renderSystem = gCoordinator.register_system<RenderSystem>();
     {
         Signature signature;
         signature.set(gCoordinator.get_component_type<Gravity>());
@@ -427,12 +429,16 @@ int main() {
         signature.set(gCoordinator.get_component_type<pixelz::Transform>());
         gCoordinator.set_system_signature<PhysicsSystem>(signature);
     }
+    physicsSystem->init();
+
+    auto renderSystem = gCoordinator.register_system<RenderSystem>();
     {
         Signature signature;
         signature.set(gCoordinator.get_component_type<pixelz::Transform>());
         signature.set(gCoordinator.get_component_type<pixelz::Pixel>());
         gCoordinator.set_system_signature<RenderSystem>(signature);
     }
+    renderSystem->init();
 
     std::vector<Entity> entities(MAX_ENTITIES);
 
@@ -462,18 +468,18 @@ int main() {
 
     float dt = 0.0f;
     while (!window.ShouldClose()) {
+        auto startTime = clock::now();
+        physicsSystem->update(dt);
+
         window.BeginDrawing();
         {
-            auto startTime = std::chrono::high_resolution_clock::now();
             window.ClearBackground(BLACK);
-
-            physicsSystem->update(dt);
             renderSystem->update(dt);
-
-            auto stopTime = std::chrono::high_resolution_clock::now();
-
-            dt = std::chrono::duration<float, std::chrono::seconds::period>(stopTime - startTime).count() * 20;
         }
         window.EndDrawing();
+
+        auto stopTime = clock::now();
+
+        dt = seconds(stopTime - startTime).count();
     }
 }
