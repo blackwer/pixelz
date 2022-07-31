@@ -421,7 +421,7 @@ int main() {
     gCoordinator.register_component<pixelz::Transform>();
     gCoordinator.register_component<pixelz::Pixel>();
 
-    auto physicsSystem = gCoordinator.register_system<PhysicsSystem>();
+    auto physics_system = gCoordinator.register_system<PhysicsSystem>();
     {
         Signature signature;
         signature.set(gCoordinator.get_component_type<Gravity>());
@@ -429,16 +429,16 @@ int main() {
         signature.set(gCoordinator.get_component_type<pixelz::Transform>());
         gCoordinator.set_system_signature<PhysicsSystem>(signature);
     }
-    physicsSystem->init();
+    physics_system->init();
 
-    auto renderSystem = gCoordinator.register_system<RenderSystem>();
+    auto render_system = gCoordinator.register_system<RenderSystem>();
     {
         Signature signature;
         signature.set(gCoordinator.get_component_type<pixelz::Transform>());
         signature.set(gCoordinator.get_component_type<pixelz::Pixel>());
         gCoordinator.set_system_signature<RenderSystem>(signature);
     }
-    renderSystem->init();
+    render_system->init();
 
     std::vector<Entity> entities(MAX_ENTITIES);
 
@@ -464,22 +464,22 @@ int main() {
                                    pixelz::Pixel{.color = raylib::Color(randColor(generator), randColor(generator),
                                                                         randColor(generator), 255)});
     }
-    physicsSystem->init();
+    physics_system->init();
 
     float dt = 0.0f;
     while (!window.ShouldClose()) {
-        auto startTime = clock::now();
-        physicsSystem->update(dt);
+        auto st = clock::now();
+        physics_system->update(dt);
 
         window.BeginDrawing();
         {
             window.ClearBackground(BLACK);
-            renderSystem->update(dt);
+            render_system->update(dt);
         }
         window.EndDrawing();
 
-        auto stopTime = clock::now();
-
-        dt = seconds(stopTime - startTime).count();
+        dt = seconds(clock::now() - st).count();
     }
+
+    return EXIT_SUCCESS;
 }
