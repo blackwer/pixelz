@@ -35,6 +35,8 @@
 #include <unordered_map>
 
 namespace pixelz {
+raylib::Window window(1920, 1080, "pixelz");
+
 using Entity = std::uint32_t;
 constexpr Entity MAX_ENTITIES = 5000;
 
@@ -56,6 +58,10 @@ struct Gravity {
 struct RigidBody {
     raylib::Vector2 velocity;
     raylib::Vector2 acceleration;
+};
+
+struct Pixel {
+    raylib::Color color;
 };
 
 class EntityManager {
@@ -382,10 +388,26 @@ class PhysicsSystem : public System {
     };
 };
 
+class RenderSystem : public System {
+  public:
+    void init();
+    void update(float dt) {
+        for (auto const &entity : entities_) {
+            auto &transform = gCoordinator.get_component<Transform>(entity);
+            auto &pixel = gCoordinator.get_component<Pixel>(entity);
+            pixel.color.DrawRectangle(transform.position.x, window.GetHeight() - transform.position.y, 4, 4);
+        }
+    };
+
+  private:
+    // void WindowSizeListener(Event &event);
+    // std::unique_ptr<Shader> shader;
+    Entity camera_;
+};
+
 } // namespace pixelz
 
 int main() {
-    raylib::Window window(640, 640, "pixelz");
     SetTargetFPS(60);
 
     using namespace pixelz;
@@ -394,34 +416,47 @@ int main() {
     gCoordinator.register_component<Gravity>();
     gCoordinator.register_component<RigidBody>();
     gCoordinator.register_component<pixelz::Transform>();
+    gCoordinator.register_component<pixelz::Pixel>();
 
     auto physicsSystem = gCoordinator.register_system<PhysicsSystem>();
-
-    Signature signature;
-    signature.set(gCoordinator.get_component_type<Gravity>());
-    signature.set(gCoordinator.get_component_type<RigidBody>());
-    signature.set(gCoordinator.get_component_type<pixelz::Transform>());
-    gCoordinator.set_system_signature<PhysicsSystem>(signature);
+    auto renderSystem = gCoordinator.register_system<RenderSystem>();
+    {
+        Signature signature;
+        signature.set(gCoordinator.get_component_type<Gravity>());
+        signature.set(gCoordinator.get_component_type<RigidBody>());
+        signature.set(gCoordinator.get_component_type<pixelz::Transform>());
+        gCoordinator.set_system_signature<PhysicsSystem>(signature);
+    }
+    {
+        Signature signature;
+        signature.set(gCoordinator.get_component_type<pixelz::Transform>());
+        signature.set(gCoordinator.get_component_type<pixelz::Pixel>());
+        gCoordinator.set_system_signature<RenderSystem>(signature);
+    }
 
     std::vector<Entity> entities(MAX_ENTITIES);
 
     std::default_random_engine generator;
-    std::uniform_real_distribution<float> randPosition(0.0f, 640.f);
+    std::uniform_real_distribution<float> randX(0.0f, window.GetWidth());
+    std::uniform_real_distribution<float> randY(0.0f, window.GetHeight());
     std::uniform_real_distribution<float> randRotation(0.0f, 3.1415926f);
     std::uniform_real_distribution<float> randScale(1.0f, 2.0f);
     std::uniform_real_distribution<float> randGravity(-10.0f, -1.0f);
-
-    float scale = randScale(generator);
+    std::uniform_int_distribution<uint8_t> randColor(0, 255);
 
     for (auto &entity : entities) {
+        float scale = randScale(generator);
+
         entity = gCoordinator.create_entity();
 
         gCoordinator.add_component(entity, Gravity{.force = {0.0f, randGravity(generator)}});
         gCoordinator.add_component(entity, RigidBody{.velocity = {0.0f, 0.0f}, .acceleration = {0.0f, 0.0f}});
+        gCoordinator.add_component(entity, pixelz::Transform{.position = {randX(generator), randY(generator)},
+                                                             .rotation = randRotation(generator),
+                                                             .scale = scale});
         gCoordinator.add_component(entity,
-                                   pixelz::Transform{.position = {randPosition(generator), randPosition(generator)},
-                                                     .rotation = randRotation(generator),
-                                                     .scale = scale});
+                                   pixelz::Pixel{.color = raylib::Color(randColor(generator), randColor(generator),
+                                                                        randColor(generator), 255)});
     }
     physicsSystem->init();
 
@@ -430,18 +465,14 @@ int main() {
         window.BeginDrawing();
         {
             auto startTime = std::chrono::high_resolution_clock::now();
-            window.ClearBackground(WHITE);
+            window.ClearBackground(BLACK);
 
             physicsSystem->update(dt);
-
-            for (auto &entity : physicsSystem->entities_) {
-                auto &transform = gCoordinator.get_component<pixelz::Transform>(entity);
-                DrawRectangle(transform.position.x, window.GetHeight() - transform.position.y, 4, 4, BLACK);
-            }
+            renderSystem->update(dt);
 
             auto stopTime = std::chrono::high_resolution_clock::now();
 
-            dt = std::chrono::duration<float, std::chrono::seconds::period>(stopTime - startTime).count();
+            dt = std::chrono::duration<float, std::chrono::seconds::period>(stopTime - startTime).count() * 20;
         }
         window.EndDrawing();
     }
