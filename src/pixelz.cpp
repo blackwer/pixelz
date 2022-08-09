@@ -59,13 +59,23 @@ struct RigidBody {
     raylib::Vector2 acceleration;
 };
 
-struct Pixel {
-    raylib::Color color;
+struct Renderable {
+    virtual void Draw(const Transform &transform){};
 };
 
-struct Rectangle {
+struct Rectangle : public Renderable {
     raylib::Color color;
-    raylib::Rectangle rec;
+
+    Rectangle(const raylib::Color &color_) : color(color_){};
+    virtual void Draw(const Transform &transform) override {
+        raylib::Rectangle rec;
+        rec.height = transform.scale;
+        rec.width = transform.scale;
+        rec.x = transform.position.x;
+        rec.y = (float)window.GetHeight() - transform.position.y;
+        rec.Draw(color);
+    }
+    Rectangle() = default;
 };
 
 class EntityManager {
@@ -398,19 +408,10 @@ class RenderSystem : public System {
     void update(float dt) {
         for (auto const &entity : entities_) {
             auto &transform = gCoordinator.get_component<Transform>(entity);
-            auto &pixel = gCoordinator.get_component<Pixel>(entity);
-            raylib::Rectangle rec;
-            rec.SetHeight(transform.scale);
-            rec.SetWidth(transform.scale);
-            rec.SetPosition(transform.position.x, window.GetHeight() - transform.position.y);
-            rec.Draw(pixel.color);
+            auto &renderable = gCoordinator.get_component<std::shared_ptr<Renderable>>(entity);
+            renderable->Draw(transform);
         }
     };
-
-  private:
-    // void WindowSizeListener(Event &event);
-    // std::unique_ptr<Shader> shader;
-    Entity camera_;
 };
 
 } // namespace pixelz
@@ -424,7 +425,7 @@ int main() {
     gCoordinator.register_component<Gravity>();
     gCoordinator.register_component<RigidBody>();
     gCoordinator.register_component<pixelz::Transform>();
-    gCoordinator.register_component<pixelz::Pixel>();
+    gCoordinator.register_component<std::shared_ptr<pixelz::Renderable>>();
 
     auto physics_system = gCoordinator.register_system<PhysicsSystem>();
     {
@@ -440,7 +441,7 @@ int main() {
     {
         Signature signature;
         signature.set(gCoordinator.get_component_type<pixelz::Transform>());
-        signature.set(gCoordinator.get_component_type<pixelz::Pixel>());
+        signature.set(gCoordinator.get_component_type<std::shared_ptr<Renderable>>());
         gCoordinator.set_system_signature<RenderSystem>(signature);
     }
     render_system->init();
@@ -465,12 +466,12 @@ int main() {
         gCoordinator.add_component(entity, pixelz::Transform{.position = {randX(generator), randY(generator)},
                                                              .rotation = randRotation(generator),
                                                              .scale = scale});
-        gCoordinator.add_component(
-            entity, pixelz::Pixel{
-                        .color = raylib::Color(randColor(generator), randColor(generator), randColor(generator), 255),
-                    });
+
+        std::shared_ptr<Renderable> ptr = std::make_shared<pixelz::Rectangle>(
+            raylib::Color(randColor(generator), randColor(generator), randColor(generator), 255));
+
+        gCoordinator.add_component(entity, ptr);
     }
-    physics_system->init();
 
     float dt = 0.0f;
     while (!window.ShouldClose()) {
